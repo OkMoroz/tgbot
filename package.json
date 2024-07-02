@@ -10,6 +10,10 @@
   "author": "Oksana Moroz",
   "license": "ISC",
   "dependencies": {
-    "node-telegram-bot-api": "^0.66.0"
+    "dotenv": "^16.4.5",
+    "fs": "^0.0.1-security",
+    "googleapis": "^140.0.1",
+    "node-telegram-bot-api": "^0.66.0",
+    "slug": "^9.1.0"
   }
 }
