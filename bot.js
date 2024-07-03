@@ -1,7 +1,7 @@
 const { google } = require("googleapis");
 const fs = require("fs");
 const TelegramBot = require("node-telegram-bot-api");
-require("dotenv").config(); // Завантажуємо змінні середовища з .env
+require("dotenv").config(); // Завантажуємо змінні середовища з .env файлу
 
 // Отримуємо токен з .env файлу
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -16,16 +16,11 @@ if (!token) {
 const bot = new TelegramBot(token, { polling: true });
 
 // Масив питань для опитування
-const questions = [
-  "Як вас звати?",
-  "Яка ваша посада?",
-  "Яка ваша електронна пошта?",
-  "Який ваш номер телефону?",
-  "Що б ви хотіли покращити в нашій компанії?",
-];
+const questions = ["Введи електронну пошту"];
 
 let currentQuestionIndex = -1; // Індекс поточного питання (-1, оскільки спочатку ми збираємо інформацію про чат)
 let chatId; // Зберігаємо id чату для взаємодії з користувачем
+let userEmail; // Зберігаємо електронну пошту користувача для подальшого використання
 
 // Налаштовуємо Google Sheets API
 const keys = require("./credentials.json");
@@ -40,20 +35,74 @@ const sheets = google.sheets({ version: "v4", auth });
 // ID таблиці Google Sheets
 const spreadsheetId = "1tqFppIRYQ3rchwECFvytaAd973vjxfQQjcZqdV48sEQ";
 
+// Зчитуємо дані з файлу data.json
+const employeesData = require("./data.json");
+
+// Функція для розрахунку залишкових днів відпустки для співробітника
+function calculateRemainingVacationDays(employee) {
+  const currentDate = new Date(); // Поточна дата
+  const employmentStartDate = new Date(employee.Дата_прийняття_на_роботу); // Дата прийняття на роботу
+  const usedVacationDays = employee.Використана_відпустка || 0; // Кількість використаних днів відпустки
+
+  console.log("Поточна дата:", currentDate);
+  console.log("Дата прийняття на роботу:", employmentStartDate);
+  console.log("Кількість використаних днів відпустки:", usedVacationDays);
+
+  // Розрахунок кількості місяців з моменту прийняття на роботу
+  const monthsSinceEmployment =
+    (currentDate.getFullYear() - employmentStartDate.getFullYear()) * 12 +
+    (currentDate.getMonth() - employmentStartDate.getMonth());
+
+  console.log("Місяців з моменту прийняття на роботу:", monthsSinceEmployment);
+
+  // Розрахунок загальної кількості днів відпустки
+  const accruedVacationDays =
+    monthsSinceEmployment * employee.Відпустка_на_місяць; // Замість хардкодування 2 дні на місяць
+
+  console.log(
+    "Загальна кількість нагромаджених днів відпустки:",
+    accruedVacationDays
+  );
+
+  // Розрахунок залишкових днів відпустки
+  const remainingVacationDays = accruedVacationDays - usedVacationDays;
+
+  console.log("Залишилось днів відпустки:", remainingVacationDays);
+
+  return Math.max(remainingVacationDays, 0); // Повертаємо максимум з залишкових днів і 0, щоб уникнути від'ємного значення
+}
+
 // Функція для збереження відповіді у Google Sheets
-async function saveAnswer(question, answer) {
+async function saveAnswer(question, answer, email) {
+  const employee = employeesData.find((emp) => emp.Пошта === email);
+
+  if (!employee) {
+    console.error(
+      `Працівника з електронною поштою ${email} не знайдено у базі даних.`
+    );
+    return;
+  }
+
   const data = {
     question: question,
     answer: answer,
     timestamp: new Date().toISOString(),
   };
 
-  const values = [[data.question, data.answer, data.timestamp]];
+  if (questions[currentQuestionIndex] === "Електронна пошта") {
+    userEmail = answer;
+  }
+
+  const remainingVacationDays = calculateRemainingVacationDays(employee);
+
+  const values = [
+    [data.question, data.answer, data.timestamp, remainingVacationDays],
+  ];
 
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "tgbot!A:C", // Використовуємо правильний формат діапазону
+      range: `tgbot!A:D`,
       valueInputOption: "RAW",
       resource: {
         values,
@@ -61,38 +110,40 @@ async function saveAnswer(question, answer) {
     });
     console.log("Відповідь збережено у Google Sheets");
 
-    // Після збереження відповіді, надсилаємо наступне питання
-    sendNextQuestion();
+    sendNextQuestion(userEmail);
   } catch (err) {
     console.error("Помилка при збереженні відповіді у Google Sheets:", err);
   }
 }
 
 // Функція для надсилання наступного питання
-function sendNextQuestion() {
+function sendNextQuestion(email) {
   currentQuestionIndex++;
   if (currentQuestionIndex < questions.length) {
     if (chatId) {
       setTimeout(() => {
-        bot
-          .sendMessage(chatId, questions[currentQuestionIndex])
-          .catch((err) => {
-            console.error("Помилка при надсиланні повідомлення:", err);
-          });
-      }, 1000); // Затримка у 1 секунду перед надсиланням наступного питання
+        let messageToSend = questions[currentQuestionIndex];
+        bot.sendMessage(chatId, messageToSend).catch((err) => {
+          console.error("Помилка при надсиланні повідомлення:", err);
+        });
+      }, 1000);
     } else {
       console.log("Не вдалося знайти chatId. Питання не буде відправлене.");
     }
   } else {
-    // Якщо всі питання вже задані, виконуємо необхідні дії
-    sendFinalMessage();
+    sendFinalMessage(userEmail);
   }
 }
 
 // Функція для надсилання останнього повідомлення після завершення опитування
-function sendFinalMessage() {
+function sendFinalMessage(email) {
+  const employee = employeesData.find((emp) => emp.Пошта === email);
+  const remainingVacationDays = calculateRemainingVacationDays(employee);
   bot
-    .sendMessage(chatId, "Записано. Дякую за ваші відповіді.")
+    .sendMessage(
+      chatId,
+      `Дякую. У тебе залишилося ${remainingVacationDays} днів відпустки`
+    )
     .then(() => {
       currentQuestionIndex = -1; // Скидаємо індекс, щоб можна було розпочати нове опитування
     })
@@ -108,9 +159,9 @@ bot.onText(/\/start/, (msg) => {
 
   // Вітаємо користувача перед початком опитування
   bot
-    .sendMessage(chatId, "Привіт! Давайте розпочнемо опитування.")
+    .sendMessage(chatId, "Давай розпочнемо :)")
     .then(() => {
-      sendNextQuestion(); // Надсилаємо перше питання після команди /start
+      sendNextQuestion(userEmail); // Надсилаємо перше питання після команди /start
     })
     .catch((err) => {
       console.error("Помилка при надсиланні повідомлення:", err);
@@ -120,8 +171,13 @@ bot.onText(/\/start/, (msg) => {
 // Обробка всіх повідомлень
 bot.on("message", (msg) => {
   if (currentQuestionIndex >= 0 && currentQuestionIndex < questions.length) {
-    // Зберігаємо введені дані після кожного питання
-    saveAnswer(questions[currentQuestionIndex], msg.text);
+    // Перевірка, чи повідомлення відповідає очікуваному користувачеві
+    if (msg.from.id === chatId) {
+      // Зберігаємо введені дані після кожного питання
+      userEmail = msg.text; // Введена електронна пошта користувача
+
+      saveAnswer(questions[currentQuestionIndex], userEmail, userEmail);
+    }
   }
 });
 
