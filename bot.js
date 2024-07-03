@@ -37,42 +37,34 @@ const spreadsheetId = "1tqFppIRYQ3rchwECFvytaAd973vjxfQQjcZqdV48sEQ";
 
 // Зчитуємо дані з файлу data.json
 const employeesData = require("./data.json");
-
 // Функція для розрахунку залишкових днів відпустки для співробітника
 function calculateRemainingVacationDays(employee) {
   const currentDate = new Date(); // Поточна дата
   const employmentStartDate = new Date(employee.Дата_прийняття_на_роботу); // Дата прийняття на роботу
   const usedVacationDays = employee.Використана_відпустка || 0; // Кількість використаних днів відпустки
 
-  console.log("Поточна дата:", currentDate);
-  console.log("Дата прийняття на роботу:", employmentStartDate);
-  console.log("Кількість використаних днів відпустки:", usedVacationDays);
-
   // Розрахунок кількості місяців з моменту прийняття на роботу
   const monthsSinceEmployment =
     (currentDate.getFullYear() - employmentStartDate.getFullYear()) * 12 +
     (currentDate.getMonth() - employmentStartDate.getMonth());
 
-  console.log("Місяців з моменту прийняття на роботу:", monthsSinceEmployment);
-
   // Розрахунок загальної кількості днів відпустки
   const accruedVacationDays =
     monthsSinceEmployment * employee.Відпустка_на_місяць; // Замість хардкодування 2 дні на місяць
 
-  console.log(
-    "Загальна кількість нагромаджених днів відпустки:",
-    accruedVacationDays
-  );
-
   // Розрахунок залишкових днів відпустки
   const remainingVacationDays = accruedVacationDays - usedVacationDays;
 
-  console.log("Залишилось днів відпустки:", remainingVacationDays);
+  // Формування рядка з інформацією для відправки користувачеві
+  const responseMessage = `
+    Місяців з моменту прийняття на роботу: ${monthsSinceEmployment}
+    Загальна кількість нагромаджених днів відпустки: ${accruedVacationDays}
+    Кількість використаних днів відпустки: ${usedVacationDays}
+    Залишилось днів відпустки: ${remainingVacationDays}
+  `;
 
-  return Math.max(remainingVacationDays, 0); // Повертаємо максимум з залишкових днів і 0, щоб уникнути від'ємного значення
+  return responseMessage.trim(); // Повертаємо рядок з інформацією (без зайвих пробілів)
 }
-
-// Функція для збереження відповіді у Google Sheets
 async function saveAnswer(question, answer, email) {
   const employee = employeesData.find((emp) => emp.Пошта === email);
 
@@ -140,10 +132,7 @@ function sendFinalMessage(email) {
   const employee = employeesData.find((emp) => emp.Пошта === email);
   const remainingVacationDays = calculateRemainingVacationDays(employee);
   bot
-    .sendMessage(
-      chatId,
-      `Дякую. У тебе залишилося ${remainingVacationDays} днів відпустки`
-    )
+    .sendMessage(chatId, `Дякую.  ${remainingVacationDays} `)
     .then(() => {
       currentQuestionIndex = -1; // Скидаємо індекс, щоб можна було розпочати нове опитування
     })
