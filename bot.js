@@ -1,4 +1,4 @@
-const TelegramBot = require("node-telegram-bot-api");
+const { google } = require("googleapis");
 const fs = require("fs");
 require("dotenv").config(); // Завантаження змінних з .env
 
@@ -20,37 +20,45 @@ const questions = [
 let currentQuestionIndex = -1; // Індекс поточного питання (-1, оскільки спочатку ми збираємо інформацію про чат)
 let chatId; // Зберігаємо id чату для взаємодії з користувачем
 
-// Функція для збереження відповіді у файл
-function saveAnswer(question, answer) {
+// Налаштування Google Sheets API
+const keys = require("./path-to-your-credentials-file.json");
+
+const auth = new google.auth.GoogleAuth({
+  keyFile: "./path-to-your-credentials-file.json",
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+});
+
+const sheets = google.sheets({ version: "v4", auth });
+
+// ID таблиці
+const spreadsheetId = "your-spreadsheet-id";
+
+// Функція для збереження відповіді у Google Sheets
+async function saveAnswer(question, answer) {
   const data = {
     question: question,
     answer: answer,
     timestamp: new Date().toISOString(),
   };
 
-  fs.readFile("responses.json", (err, fileData) => {
-    if (err && err.code === "ENOENT") {
-      // Якщо файл не існує, створюємо новий
-      fs.writeFile("responses.json", JSON.stringify([data], null, 2), (err) => {
-        if (err) throw err;
-        console.log("Відповідь збережено");
+  const values = [[data.question, data.answer, data.timestamp]];
 
-        // Після збереження відповіді, надсилаємо наступне питання
-        sendNextQuestion();
-      });
-    } else {
-      // Якщо файл існує, додаємо нову відповідь
-      const json = JSON.parse(fileData);
-      json.push(data);
-      fs.writeFile("responses.json", JSON.stringify(json, null, 2), (err) => {
-        if (err) throw err;
-        console.log("Відповідь збережено");
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "Sheet1!A:C", // Змінити на відповідний діапазон вашої таблиці
+      valueInputOption: "RAW",
+      resource: {
+        values,
+      },
+    });
+    console.log("Відповідь збережено у Google Sheets");
 
-        // Після збереження відповіді, надсилаємо наступне питання
-        sendNextQuestion();
-      });
-    }
-  });
+    // Після збереження відповіді, надсилаємо наступне питання
+    sendNextQuestion();
+  } catch (err) {
+    console.error("Помилка при збереженні відповіді у Google Sheets:", err);
+  }
 }
 
 // Функція для надсилання наступного питання
