@@ -1,27 +1,28 @@
 const { google } = require("googleapis");
 const fs = require("fs");
-require("dotenv").config(); // Завантаження змінних з .env
+const TelegramBot = require("node-telegram-bot-api"); // Import TelegramBot class
+require("dotenv").config(); // Load environment variables from .env
 
-// Отримання токену з .env файлу
+// Retrieve token from .env file
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
-// Створюємо бота
+// Create bot instance
 const bot = new TelegramBot(token, { polling: true });
 
-// Масив питань для опитування
+// Array of survey questions
 const questions = [
-  "Як вас звати?",
-  "Яка ваша посада?",
-  "Яка ваша електронна пошта?",
-  "Який ваш номер телефону?",
-  "Що ви б хотіли покращити у нашій компанії?",
+  "What is your name?",
+  "What is your position?",
+  "What is your email address?",
+  "What is your phone number?",
+  "What would you like to improve in our company?",
 ];
 
-let currentQuestionIndex = -1; // Індекс поточного питання (-1, оскільки спочатку ми збираємо інформацію про чат)
-let chatId; // Зберігаємо id чату для взаємодії з користувачем
+let currentQuestionIndex = -1; // Index of current question (-1 initially as we gather chat information)
+let chatId; // Store chat id for interaction with user
 
-// Налаштування Google Sheets API
-const keys = require("./path-to-your-credentials-file.json");
+// Google Sheets API setup
+const keys = require("./credentials.json");
 
 const auth = new google.auth.GoogleAuth({
   keyFile: "./path-to-your-credentials-file.json",
@@ -30,10 +31,11 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-// ID таблиці
-const spreadsheetId = "your-spreadsheet-id";
+// Spreadsheet ID
+const spreadsheetId =
+  "1tqFppIRYQ3rchwECFvytaAd973vjxfQQjcZqdV48sEQ/edit?gid=0#gid=0";
 
-// Функція для збереження відповіді у Google Sheets
+// Function to save response to Google Sheets
 async function saveAnswer(question, answer) {
   const data = {
     question: question,
@@ -46,22 +48,22 @@ async function saveAnswer(question, answer) {
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "Sheet1!A:C", // Змінити на відповідний діапазон вашої таблиці
+      range: "Sheet1!A:C",
       valueInputOption: "RAW",
       resource: {
         values,
       },
     });
-    console.log("Відповідь збережено у Google Sheets");
+    console.log("Response saved to Google Sheets");
 
-    // Після збереження відповіді, надсилаємо наступне питання
+    // After saving response, send the next question
     sendNextQuestion();
   } catch (err) {
-    console.error("Помилка при збереженні відповіді у Google Sheets:", err);
+    console.error("Error saving response to Google Sheets:", err);
   }
 }
 
-// Функція для надсилання наступного питання
+// Function to send the next question
 function sendNextQuestion() {
   currentQuestionIndex++;
   if (currentQuestionIndex < questions.length) {
@@ -70,55 +72,55 @@ function sendNextQuestion() {
         bot
           .sendMessage(chatId, questions[currentQuestionIndex])
           .then(() => {
-            // Після успішної відправки питання, очікуємо відповідь
+            // After successfully sending question, await response
           })
           .catch((err) => {
-            console.error("Помилка при надсиланні повідомлення:", err);
+            console.error("Error sending message:", err);
           });
-      }, 1000); // Затримка у 1 секунду перед надсиланням наступного питання
+      }, 1000); // 1-second delay before sending the next question
     } else {
-      console.log("Не вдалося знайти chatId. Питання не буде відправлене.");
+      console.log("Unable to find chatId. Question will not be sent.");
     }
   } else {
-    // Якщо всі питання вже задані, виконуємо необхідні дії
+    // If all questions have been asked, perform necessary actions
     sendFinalMessage();
   }
 }
 
-// Функція для відправлення останнього повідомлення після завершення опитування
+// Function to send final message after survey completion
 function sendFinalMessage() {
   bot
-    .sendMessage(chatId, "Записано. Дякую за ваші відповіді.")
+    .sendMessage(chatId, "Recorded. Thank you for your responses.")
     .then(() => {
-      currentQuestionIndex = -1; // Скидаємо індекс, щоб можна було розпочати нове опитування
+      currentQuestionIndex = -1; // Reset index to start a new survey
     })
     .catch((err) => {
-      console.error("Помилка при надсиланні останнього повідомлення:", err);
+      console.error("Error sending final message:", err);
     });
 }
 
-// Обробка команди /start
+// Handling the /start command
 bot.onText(/\/start/, (msg) => {
-  chatId = msg.chat.id; // Зберігаємо id чату
-  currentQuestionIndex = -1; // Скидаємо індекс перед початком опитування
+  chatId = msg.chat.id; // Store chat id
+  currentQuestionIndex = -1; // Reset index before starting survey
 
-  // Вітаємо користувача перед початком опитування
+  // Greet user before starting survey
   bot
-    .sendMessage(chatId, "Привіт! Давайте розпочнемо опитування.")
+    .sendMessage(chatId, "Hello! Let's start the survey.")
     .then(() => {
-      sendNextQuestion(); // Надсилаємо перше питання після команди /start
+      sendNextQuestion(); // Send the first question after /start command
     })
     .catch((err) => {
-      console.error("Помилка при надсиланні повідомлення:", err);
+      console.error("Error sending message:", err);
     });
 });
 
-// Обробка всіх повідомлень
+// Handling all messages
 bot.on("message", (msg) => {
   if (currentQuestionIndex >= 0 && currentQuestionIndex < questions.length) {
-    // Зберігаємо введені дані після кожного питання
+    // Save input data after each question
     saveAnswer(questions[currentQuestionIndex], msg.text);
   }
 });
 
-console.log("Бот запущено");
+console.log("Bot started");
