@@ -1,41 +1,46 @@
 const { google } = require("googleapis");
 const fs = require("fs");
-const TelegramBot = require("node-telegram-bot-api"); // Import TelegramBot class
-require("dotenv").config(); // Load environment variables from .env
+const TelegramBot = require("node-telegram-bot-api");
+require("dotenv").config(); // Завантажуємо змінні середовища з .env
 
-// Retrieve token from .env file
+// Отримуємо токен з .env файлу
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
-// Create bot instance
+// Перевірка, чи зчитано токен з .env файлу
+if (!token) {
+  console.error("Не вдалося зчитати TELEGRAM_BOT_TOKEN з .env файлу.");
+  process.exit(1); // Вихід з програми з кодом помилки
+}
+
+// Створюємо екземпляр бота
 const bot = new TelegramBot(token, { polling: true });
 
-// Array of survey questions
+// Масив питань для опитування
 const questions = [
-  "What is your name?",
-  "What is your position?",
-  "What is your email address?",
-  "What is your phone number?",
-  "What would you like to improve in our company?",
+  "Як вас звати?",
+  "Яка ваша посада?",
+  "Яка ваша електронна пошта?",
+  "Який ваш номер телефону?",
+  "Що б ви хотіли покращити в нашій компанії?",
 ];
 
-let currentQuestionIndex = -1; // Index of current question (-1 initially as we gather chat information)
-let chatId; // Store chat id for interaction with user
+let currentQuestionIndex = -1; // Індекс поточного питання (-1, оскільки спочатку ми збираємо інформацію про чат)
+let chatId; // Зберігаємо id чату для взаємодії з користувачем
 
-// Google Sheets API setup
+// Налаштовуємо Google Sheets API
 const keys = require("./credentials.json");
 
 const auth = new google.auth.GoogleAuth({
-  keyFile: "./path-to-your-credentials-file.json",
+  keyFile: "./credentials.json",
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
 const sheets = google.sheets({ version: "v4", auth });
 
-// Spreadsheet ID
-const spreadsheetId =
-  "1tqFppIRYQ3rchwECFvytaAd973vjxfQQjcZqdV48sEQ/edit?gid=0#gid=0";
+// ID таблиці Google Sheets
+const spreadsheetId = "1tqFppIRYQ3rchwECFvytaAd973vjxfQQjcZqdV48sEQ";
 
-// Function to save response to Google Sheets
+// Функція для збереження відповіді у Google Sheets
 async function saveAnswer(question, answer) {
   const data = {
     question: question,
@@ -48,22 +53,22 @@ async function saveAnswer(question, answer) {
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "Sheet1!A:C",
+      range: "tgbot!A:C", // Використовуємо правильний формат діапазону
       valueInputOption: "RAW",
       resource: {
         values,
       },
     });
-    console.log("Response saved to Google Sheets");
+    console.log("Відповідь збережено у Google Sheets");
 
-    // After saving response, send the next question
+    // Після збереження відповіді, надсилаємо наступне питання
     sendNextQuestion();
   } catch (err) {
-    console.error("Error saving response to Google Sheets:", err);
+    console.error("Помилка при збереженні відповіді у Google Sheets:", err);
   }
 }
 
-// Function to send the next question
+// Функція для надсилання наступного питання
 function sendNextQuestion() {
   currentQuestionIndex++;
   if (currentQuestionIndex < questions.length) {
@@ -71,56 +76,53 @@ function sendNextQuestion() {
       setTimeout(() => {
         bot
           .sendMessage(chatId, questions[currentQuestionIndex])
-          .then(() => {
-            // After successfully sending question, await response
-          })
           .catch((err) => {
-            console.error("Error sending message:", err);
+            console.error("Помилка при надсиланні повідомлення:", err);
           });
-      }, 1000); // 1-second delay before sending the next question
+      }, 1000); // Затримка у 1 секунду перед надсиланням наступного питання
     } else {
-      console.log("Unable to find chatId. Question will not be sent.");
+      console.log("Не вдалося знайти chatId. Питання не буде відправлене.");
     }
   } else {
-    // If all questions have been asked, perform necessary actions
+    // Якщо всі питання вже задані, виконуємо необхідні дії
     sendFinalMessage();
   }
 }
 
-// Function to send final message after survey completion
+// Функція для надсилання останнього повідомлення після завершення опитування
 function sendFinalMessage() {
   bot
-    .sendMessage(chatId, "Recorded. Thank you for your responses.")
+    .sendMessage(chatId, "Записано. Дякую за ваші відповіді.")
     .then(() => {
-      currentQuestionIndex = -1; // Reset index to start a new survey
+      currentQuestionIndex = -1; // Скидаємо індекс, щоб можна було розпочати нове опитування
     })
     .catch((err) => {
-      console.error("Error sending final message:", err);
+      console.error("Помилка при надсиланні останнього повідомлення:", err);
     });
 }
 
-// Handling the /start command
+// Обробка команди /start
 bot.onText(/\/start/, (msg) => {
-  chatId = msg.chat.id; // Store chat id
-  currentQuestionIndex = -1; // Reset index before starting survey
+  chatId = msg.chat.id; // Зберігаємо id чату
+  currentQuestionIndex = -1; // Скидаємо індекс перед початком опитування
 
-  // Greet user before starting survey
+  // Вітаємо користувача перед початком опитування
   bot
-    .sendMessage(chatId, "Hello! Let's start the survey.")
+    .sendMessage(chatId, "Привіт! Давайте розпочнемо опитування.")
     .then(() => {
-      sendNextQuestion(); // Send the first question after /start command
+      sendNextQuestion(); // Надсилаємо перше питання після команди /start
     })
     .catch((err) => {
-      console.error("Error sending message:", err);
+      console.error("Помилка при надсиланні повідомлення:", err);
     });
 });
 
-// Handling all messages
+// Обробка всіх повідомлень
 bot.on("message", (msg) => {
   if (currentQuestionIndex >= 0 && currentQuestionIndex < questions.length) {
-    // Save input data after each question
+    // Зберігаємо введені дані після кожного питання
     saveAnswer(questions[currentQuestionIndex], msg.text);
   }
 });
 
-console.log("Bot started");
+console.log("Бот запущено");
