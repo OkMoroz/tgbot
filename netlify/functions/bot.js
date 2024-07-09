@@ -3,7 +3,6 @@ const TelegramBot = require("node-telegram-bot-api");
 require("dotenv").config({
   path: require("path").resolve(__dirname, "../../.env"),
 });
-const fs = require("fs");
 const path = require("path");
 
 // Отримуємо токен з .env файлу
@@ -23,7 +22,7 @@ const questions = ["Введи свій ID"];
 
 let currentQuestionIndex = -1; // Індекс поточного питання (-1, оскільки спочатку ми збираємо інформацію про чат)
 let chatId; // Зберігаємо id чату для взаємодії з користувачем
-let userID; // Зберігаємо електронну пошту користувача для подальшого використання
+let ID; // Зберігаємо ID користувача для подальшого використання
 
 // Налаштовуємо Google Sheets API
 const keys = require(path.resolve(__dirname, "./credentials.json"));
@@ -67,6 +66,9 @@ function calculateRemainingVacationDays(employee) {
 }
 
 async function saveAnswer(question, answer, ID) {
+  console.log(
+    `Збереження відповіді. Питання: ${question}, Відповідь: ${answer}, ID: ${ID}`
+  );
   const employee = employeesData.find((emp) => emp.ID === ID);
 
   if (!employee) {
@@ -83,8 +85,8 @@ async function saveAnswer(question, answer, ID) {
     timestamp: now.toISOString().slice(0, 16), // Отримання дати у вказаному форматі без секунд і мілісекунд
   };
 
-  if (questions[currentQuestionIndex] === "Електронна пошта") {
-    userID = answer;
+  if (questions[currentQuestionIndex] === "ID") {
+    ID = answer;
   }
 
   const remainingVacationDays = calculateRemainingVacationDays(employee);
@@ -104,18 +106,22 @@ async function saveAnswer(question, answer, ID) {
     });
     console.log("Відповідь збережено у Google Sheets");
 
-    sendNextQuestion(userID);
+    sendNextQuestion(ID);
   } catch (err) {
     console.error("Помилка при збереженні відповіді у Google Sheets:", err);
   }
 }
 
-function sendNextQuestion(email) {
+function sendNextQuestion(ID) {
   currentQuestionIndex++;
+  console.log(
+    `Наступне питання. Індекс: ${currentQuestionIndex}, Загальна кількість питань: ${questions.length}`
+  );
   if (currentQuestionIndex < questions.length) {
     if (chatId) {
       setTimeout(() => {
         let messageToSend = questions[currentQuestionIndex];
+        console.log(`Надсилання питання: ${messageToSend}`);
         bot.sendMessage(chatId, messageToSend).catch((err) => {
           console.error("Помилка при надсиланні повідомлення:", err);
         });
@@ -124,15 +130,20 @@ function sendNextQuestion(email) {
       console.log("Не вдалося знайти chatId. Питання не буде відправлене.");
     }
   } else {
-    sendFinalMessage(userID);
+    sendFinalMessage(ID);
   }
 }
 
-function sendFinalMessage(email) {
-  const employee = employeesData.find((emp) => emp.Пошта === email);
+function sendFinalMessage(ID) {
+  const employee = employeesData.find((emp) => emp.ID === ID);
   const remainingVacationDays = calculateRemainingVacationDays(employee);
+  const responseMessage = createEmployeeInfoMessage(
+    employee,
+    remainingVacationDays
+  );
+
   bot
-    .sendMessage(chatId, `Дякую.  ${remainingVacationDays} `)
+    .sendMessage(chatId, responseMessage.trim())
     .then(() => {
       currentQuestionIndex = -1; // Скидаємо індекс, щоб можна було розпочати нове опитування
     })
@@ -141,14 +152,35 @@ function sendFinalMessage(email) {
     });
 }
 
+function createEmployeeInfoMessage(employee, remainingVacationDays) {
+  const currentDate = new Date();
+  const employmentStartDate = new Date(employee.Дата_прийняття_на_роботу);
+  const usedVacationDays = employee.Використана_відпустка || 0;
+  const monthsSinceEmployment =
+    (currentDate.getFullYear() - employmentStartDate.getFullYear()) * 12 +
+    (currentDate.getMonth() - employmentStartDate.getMonth());
+  const accruedVacationDays =
+    monthsSinceEmployment * employee.Відпустка_на_місяць;
+
+  const responseMessage = `
+    Місяців з моменту прийняття на роботу: ${monthsSinceEmployment}
+    Загальна кількість нагромаджених днів відпустки: ${accruedVacationDays}
+    Кількість використаних днів відпустки: ${usedVacationDays}
+    Залишилось днів відпустки: ${remainingVacationDays}
+  `;
+
+  return responseMessage.trim();
+}
+
 bot.onText(/\/start/, (msg) => {
   chatId = msg.chat.id; // Зберігаємо id чату
   currentQuestionIndex = -1; // Скидаємо індекс перед початком опитування
 
+  console.log(`Отримано команду /start. Chat ID: ${chatId}`);
   bot
     .sendMessage(chatId, "Давай розпочнемо :)")
     .then(() => {
-      sendNextQuestion(userID); // Надсилаємо перше питання після команди /start
+      sendNextQuestion(ID); // Надсилаємо перше питання після команди /start
     })
     .catch((err) => {
       console.error("Помилка при надсиланні повідомлення:", err);
@@ -156,11 +188,14 @@ bot.onText(/\/start/, (msg) => {
 });
 
 bot.on("message", (msg) => {
+  console.log(
+    `Отримано повідомлення. Chat ID: ${msg.chat.id}, Текст: ${msg.text}`
+  );
   if (currentQuestionIndex >= 0 && currentQuestionIndex < questions.length) {
     if (msg.from.id === chatId) {
-      userID = msg.text; // Введений ID користувача
+      ID = msg.text; // Введений ID користувача
 
-      saveAnswer(questions[currentQuestionIndex], userID, userID);
+      saveAnswer(questions[currentQuestionIndex], ID, ID);
     }
   }
 });
@@ -175,4 +210,3 @@ module.exports.handler = async (event, context) => {
     }),
   };
 };
-console.log("Бот запущено");
