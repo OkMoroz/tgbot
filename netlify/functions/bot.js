@@ -1,7 +1,10 @@
 const { google } = require("googleapis");
 const TelegramBot = require("node-telegram-bot-api");
-require("dotenv").config();
+require("dotenv").config({
+  path: require("path").resolve(__dirname, "../../.env"),
+});
 const fs = require("fs");
+const path = require("path");
 
 // Отримуємо токен з .env файлу
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -23,10 +26,10 @@ let chatId; // Зберігаємо id чату для взаємодії з к�
 let userID; // Зберігаємо електронну пошту користувача для подальшого використання
 
 // Налаштовуємо Google Sheets API
-const keys = require("./credentials.json");
+const keys = require(path.resolve(__dirname, "./credentials.json"));
 
 const auth = new google.auth.GoogleAuth({
-  keyFile: "./credentials.json",
+  keyFile: path.resolve(__dirname, "./credentials.json"),
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
@@ -36,7 +39,7 @@ const sheets = google.sheets({ version: "v4", auth });
 const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
 // Зчитуємо дані з файлу data.json
-const employeesData = require("./data.json");
+const employeesData = require(path.resolve(__dirname, "./data.json"));
 
 // Функція для розрахунку залишкових днів відпустки для співробітника
 function calculateRemainingVacationDays(employee) {
@@ -73,10 +76,11 @@ async function saveAnswer(question, answer, ID) {
     return;
   }
 
+  const now = new Date();
   const data = {
     question: question,
     answer: answer,
-    timestamp: new Date().toISOString(),
+    timestamp: now.toISOString().slice(0, 16), // Отримання дати у вказаному форматі без секунд і мілісекунд
   };
 
   if (questions[currentQuestionIndex] === "Електронна пошта") {
