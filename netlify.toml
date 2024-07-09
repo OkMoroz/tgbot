@@ -1,5 +1,7 @@
 [build]
   functions = "netlify/functions"
+  command = "npm start"  # Команда для запуску вашого бота
+  publish = "."  # Директорія вашого основного додатку
 
 [functions]
   node_bundler = "esbuild"
