@@ -16,11 +16,11 @@ if (!token) {
 const bot = new TelegramBot(token, { polling: true });
 
 // Масив питань для опитування
-const questions = ["Введи електронну пошту"];
+const questions = ["Введи свій ID"];
 
 let currentQuestionIndex = -1; // Індекс поточного питання (-1, оскільки спочатку ми збираємо інформацію про чат)
 let chatId; // Зберігаємо id чату для взаємодії з користувачем
-let userEmail; // Зберігаємо електронну пошту користувача для подальшого використання
+let userID; // Зберігаємо електронну пошту користувача для подальшого використання
 
 // Налаштовуємо Google Sheets API
 const keys = require("./credentials.json");
@@ -63,12 +63,12 @@ function calculateRemainingVacationDays(employee) {
   return responseMessage.trim(); // Повертаємо рядок з інформацією (без зайвих пробілів)
 }
 
-async function saveAnswer(question, answer, email) {
-  const employee = employeesData.find((emp) => emp.Пошта === email);
+async function saveAnswer(question, answer, ID) {
+  const employee = employeesData.find((emp) => emp.ID === ID);
 
   if (!employee) {
     console.error(
-      `Працівника з електронною поштою ${email} не знайдено у базі даних.`
+      `Працівника з електронною поштою ${ID} не знайдено у базі даних.`
     );
     return;
   }
@@ -80,7 +80,7 @@ async function saveAnswer(question, answer, email) {
   };
 
   if (questions[currentQuestionIndex] === "Електронна пошта") {
-    userEmail = answer;
+    userID = answer;
   }
 
   const remainingVacationDays = calculateRemainingVacationDays(employee);
@@ -100,7 +100,7 @@ async function saveAnswer(question, answer, email) {
     });
     console.log("Відповідь збережено у Google Sheets");
 
-    sendNextQuestion(userEmail);
+    sendNextQuestion(userID);
   } catch (err) {
     console.error("Помилка при збереженні відповіді у Google Sheets:", err);
   }
@@ -120,7 +120,7 @@ function sendNextQuestion(email) {
       console.log("Не вдалося знайти chatId. Питання не буде відправлене.");
     }
   } else {
-    sendFinalMessage(userEmail);
+    sendFinalMessage(userID);
   }
 }
 
@@ -144,7 +144,7 @@ bot.onText(/\/start/, (msg) => {
   bot
     .sendMessage(chatId, "Давай розпочнемо :)")
     .then(() => {
-      sendNextQuestion(userEmail); // Надсилаємо перше питання після команди /start
+      sendNextQuestion(userID); // Надсилаємо перше питання після команди /start
     })
     .catch((err) => {
       console.error("Помилка при надсиланні повідомлення:", err);
@@ -154,9 +154,9 @@ bot.onText(/\/start/, (msg) => {
 bot.on("message", (msg) => {
   if (currentQuestionIndex >= 0 && currentQuestionIndex < questions.length) {
     if (msg.from.id === chatId) {
-      userEmail = msg.text; // Введена електронна пошта користувача
+      userID = msg.text; // Введений ID користувача
 
-      saveAnswer(questions[currentQuestionIndex], userEmail, userEmail);
+      saveAnswer(questions[currentQuestionIndex], userID, userID);
     }
   }
 });
@@ -171,3 +171,4 @@ module.exports.handler = async (event, context) => {
     }),
   };
 };
+console.log("Бот запущено");
