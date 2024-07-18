@@ -5,7 +5,8 @@
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"Running build script...\""
   },
   "keywords": [],
   "author": "Oksana Moroz",
@@ -15,7 +16,6 @@
     "fs": "^0.0.1-security",
     "google-auth-library": "^9.11.0",
     "googleapis": "^140.0.1",
-    "node-telegram-bot-api": "^0.66.0",
-    "slug": "^9.1.0"
+    "node-telegram-bot-api": "^0.66.0"
   }
 }

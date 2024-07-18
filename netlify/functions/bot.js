@@ -1,7 +1,7 @@
 const { google } = require("googleapis");
 const TelegramBot = require("node-telegram-bot-api");
 require("dotenv").config({
-  path: require("path").resolve(__dirname, ".env"),
+  path: require("path").resolve(__dirname, "../../.env"),
 });
 const path = require("path");
 
